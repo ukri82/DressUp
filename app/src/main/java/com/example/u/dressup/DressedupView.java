@@ -125,7 +125,7 @@ public class DressedupView extends ImageView implements ImageTransformCB {
         myListener.reset();
         myGestureListener.reset();
         initializeImages();
-        //updateDisplay();
+        updateDisplay();
     }
 
     @Override
@@ -151,7 +151,7 @@ public class DressedupView extends ImageView implements ImageTransformCB {
 
     public void initializeImages()
     {
-        /*if (myDressMat != null)
+        if (myDressMat != null)
         {
             myDressOnlyMatGrayScale = Mat.zeros(myDressMat.size(), CvType.CV_8U);
             Imgproc.cvtColor(myDressMat, myDressOnlyMatGrayScale, Imgproc.COLOR_BGRA2GRAY);
@@ -169,13 +169,25 @@ public class DressedupView extends ImageView implements ImageTransformCB {
             myDressOnlyMat = Mat.zeros(myDressMat.size(), myDressMat.type());
             myDressMat.copyTo(myDressOnlyMat, aDressOnlyMatGrayScaleInv);
 
+            /*Mat aDressContourMat = Mat.zeros(myDressMat.size(), myDressMat.type());
+            aDressContourMat.setTo(new Scalar(255, 255, 255));
+
+            aDressOnlyMatGrayScaleInv = Mat.zeros(anImageProc.getContourImage().size(), anImageProc.getContourImage().type());
+            aDressOnlyMatGrayScaleInv.setTo(new Scalar(254));
+            Core.subtract(aDressOnlyMatGrayScaleInv, anImageProc.getContourImage(), aDressOnlyMatGrayScaleInv);
+
+            aDressContourMat.copyTo(aDressContourMat, aDressOnlyMatGrayScaleInv);
+
+            Core.add(aDressContourMat, myDressOnlyMat, myDressOnlyMat);*/
+
             myMergedBMP = Bitmap.createBitmap(myDressMat.cols(), myDressMat.rows(), Bitmap.Config.ARGB_8888);
 
 
-        }*/
+        }
 
 
-        if (myDressMat != null)
+
+        /*if (myDressMat != null)
         {
             myDressOnlyMatGrayScale = Mat.zeros(myDressMat.size(), CvType.CV_8U);
             Imgproc.cvtColor(myDressMat, myDressOnlyMatGrayScale, Imgproc.COLOR_BGR2GRAY);
@@ -197,7 +209,7 @@ public class DressedupView extends ImageView implements ImageTransformCB {
             Utils.matToBitmap(myDressOnlyMat, myMergedBMP);
             this.setImageBitmap(myMergedBMP);
             this.invalidate();
-        }
+        }*/
     }
 
     public Mat getDressTransformationMatrix()
