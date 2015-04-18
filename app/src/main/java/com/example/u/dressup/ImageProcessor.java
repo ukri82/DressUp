@@ -66,32 +66,49 @@ public class ImageProcessor
         {
             int index = 0;
 
+            int[] iBuff = new int[ (int) (myHiearchy.total() * myHiearchy.channels())];
+            myHiearchy.get(0, 0, iBuff);
+
             for (int idx = 0; idx < aContours.size(); idx++)
             {
-                Mat contour = aContours.get(idx);
-
-                Rect rect = Imgproc.boundingRect(new MatOfPoint(contour));
-
-                double aRectArea = rect.area();
-
-
-                if(aRectArea > 50)
+                if(iBuff[idx * 4 + 3] == -1)
                 {
-                    MatOfPoint aSrcContour = aContours.get(idx);
+                    MatOfPoint contour = aContours.get(idx);
 
-                    if(index >= 0)
-                        myBigContours.add(aSrcContour);
+                    printContour(contour);
 
-                    if(myBigContours.size() == 30)
-                        return;
+                    Rect rect = Imgproc.boundingRect(new MatOfPoint(contour));
 
-                    index++;
+                    double aRectArea = rect.area();
+
+
+                    if (aRectArea > 50)
+                    {
+                        MatOfPoint aSrcContour = aContours.get(idx);
+
+                        if (index >= 0)
+                            myBigContours.add(aSrcContour);
+
+                        if (myBigContours.size() == 30)
+                            return;
+
+                        index++;
+                    }
                 }
             }
 
             Log.i("selectBigContours", "Number of big contours :" + myBigContours.size());
         }
 
+        private void printContour(MatOfPoint aContour_in)
+        {
+            Log.i("aContour_in", "aContour_in size :" + aContour_in.size().height);
+            for(int jdx = 0; jdx < aContour_in.size().height; jdx++)
+            {
+                double[] aPoint = aContour_in.get(jdx, 0);
+                Log.i("aContour_in", "aPoint :[" + aPoint[0] + ", " + aPoint[1] + "]");
+            }
+        }
         private int getNextUnvisited()
         {
             for(int i = 0; i < myVisitedArray.length; i++)
@@ -251,9 +268,56 @@ public class ImageProcessor
             {
                 double[] aPoint = null;
                 aPoint = mySingleContours.get(0).get(jdx, 0);
-                //Log.i("joinContours", "mySingleContours aPoint :[" + aPoint[0] + ", " + aPoint[1]);
+                Log.i("joinContours", "mySingleContours aPoint :[" + aPoint[0] + ", " + aPoint[1]);
             }
         }
+
+        private void smoothContours()
+        {
+            int aKernelSize = 15;
+            Mat aNewContour = new Mat();
+            int aNumPoints = (int)mySingleContours.get(0).size().height;
+            for(int jdx = 0; jdx < aNumPoints; jdx++)
+            {
+                double[] aNewPoint = new double[2];
+                aNewPoint[0] = 0;
+                aNewPoint[1] = 0;
+
+                for(int j = -aKernelSize/2; j <= aKernelSize/2; j++)
+                {
+                    int anIndex = jdx + j;
+                    if(anIndex < 0)
+                    {
+                        anIndex = aNumPoints + anIndex;
+                    }
+                    if(anIndex >= aNumPoints)
+                    {
+                        anIndex = anIndex - aNumPoints;
+                    }
+                    double[] aPoint = null;
+                    aPoint = mySingleContours.get(0).get(anIndex, 0);
+
+                    aNewPoint[0] += aPoint[0];
+                    aNewPoint[1] += aPoint[1];
+
+                    //Log.i("joinContours", "mySingleContours aPoint :[" + aPoint[0] + ", " + aPoint[1] + "]");
+                }
+                aNewPoint[0] = aNewPoint[0] / aKernelSize;
+                aNewPoint[1] = aNewPoint[1] / aKernelSize;
+
+                //Log.i("joinContours", "mySingleContours aNewPoint :[" + aNewPoint[0] + ", " + aNewPoint[1] + "]");
+
+
+                Mat aRows = Mat.zeros(1, 1, mySingleContours.get(0).type());
+                aRows.put(0, 0, aNewPoint);
+
+                aNewContour.push_back(aRows);
+            }
+
+            mySingleContours.get(0).release();
+            mySingleContours.get(0).push_back(aNewContour);
+        }
+        Mat myHiearchy = null;
         private void adjustContours()
         {
             Mat aDressOnlyMatGrayScale = Mat.zeros(myImageSize, CvType.CV_8U);
@@ -266,14 +330,16 @@ public class ImageProcessor
             Imgproc.Canny(aDressOnlyMatGrayScale, anEdgeImage, 0, 255);
 
             List<MatOfPoint> aContours = new ArrayList<MatOfPoint>();
-            Mat hierarchy = new Mat();
-            Imgproc.findContours(anEdgeImage, aContours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_NONE, new Point(0, 0));
+            myHiearchy = new Mat();
+            Imgproc.findContours(anEdgeImage, aContours, myHiearchy, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_NONE, new Point(0, 0));
 
             selectBigContours(aContours);
 
             removeDuplicatePoints();
 
             joinContours();
+
+            smoothContours();
 
             myContourImage = Mat.zeros(myImageMatrix.size(), CvType.CV_8U);
             Imgproc.drawContours(myContourImage, mySingleContours, -1, new Scalar(255, 255, 255));
