@@ -46,6 +46,53 @@ public class ImageProcessor
             myVisitedMatrix = Arrays.copyOf(aRegionGrower.getVisitedMatrix(), aRegionGrower.getVisitedMatrix().length);
         }
 
+        correctRegion();
+    }
+
+    public void correctRegion()
+    {
+        Mat aVisitedMatrix = Mat.zeros(myImageMatrix.size(), CvType.CV_8U);
+        aVisitedMatrix.put(0, 0, myVisitedMatrix);
+
+        Imgproc.dilate(aVisitedMatrix, aVisitedMatrix, Imgproc.getStructuringElement(Imgproc.MORPH_ELLIPSE, new Size(3, 3)));
+
+        aVisitedMatrix.get(0, 0, myVisitedMatrix);
+    }
+    public void correctRegion1()
+    {
+        for(int i = 0; i < myImageMatrix.rows(); i++)
+        {
+            for(int j = 0; j < myImageMatrix.cols(); j++)
+            {
+                int anIndex = (int)(i * myImageMatrix.cols() + j);
+                byte aPixelVal = myVisitedMatrix[anIndex];
+                if(aPixelVal == 0)
+                {
+                    int aNumVisitedPixels = 0;
+                    for (int x = i - 1; x <= i + 1; x++)
+                    {
+                        for (int y = j - 1; y <= j + 1; y++)
+                        {
+                            if (x >= 0 && y >= 0 && x < myImageMatrix.rows() && y < myImageMatrix.cols())
+                            {
+                                int anCurrentIndex = x * myImageMatrix.cols() + y;
+                                if (myVisitedMatrix[anCurrentIndex] > 0)
+                                {
+                                    aNumVisitedPixels++;
+                                }
+                            }
+                        }
+                    }
+                    if(aNumVisitedPixels > 4)
+                    {
+                        myVisitedMatrix[anIndex] = (byte)255;
+                    }
+                }
+            }
+        }
+    }
+    public void correctRegionContourSmoothing()
+    {
         //  Extract the contour boundary of the region and smooth it. Result is a binary image with only the boundary burned to it.
         Point aSeedPoint = null;
         {
