@@ -105,10 +105,11 @@ public class SelfieProcessor
 
     public Point getPanFactor()
     {
+        Point aZoom = getZoomFactor();
         Point aSelfieCenter = new Point(mySelfieBoundingRect.x + mySelfieBoundingRect.width/2, mySelfieBoundingRect.y + mySelfieBoundingRect.height / 2);
         Point aDressCenter = new Point(myDressBoundingRect.x + myDressBoundingRect.width/2, myDressBoundingRect.y + myDressBoundingRect.height / 2);
 
-        return new Point(aSelfieCenter.x - aDressCenter.x, aSelfieCenter.y - aDressCenter.y);
+        return new Point((aSelfieCenter.x - aDressCenter.x) / aZoom.x, (aSelfieCenter.y - aDressCenter.y) / aZoom.y);
     }
 
     public void register()
