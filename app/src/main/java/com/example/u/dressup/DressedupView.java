@@ -32,6 +32,9 @@ import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.core.Size;
 
+import java.util.Timer;
+import java.util.TimerTask;
+
 interface ImageTransformCB
 {
     public void zoom();
@@ -41,6 +44,11 @@ interface ImageTransformCB
 interface LongPressCB
 {
     public void press();
+}
+
+interface SelfieUpdateCB
+{
+    public void selfieUpdated();
 }
 
 /**
@@ -63,6 +71,8 @@ public class DressedupView extends ImageView implements ImageTransformCB {
 
 
     private Bitmap myMergedBMP;
+
+    private SelfieUpdateCB mySelfieUpdateCB;
 
 
 
@@ -98,6 +108,11 @@ public class DressedupView extends ImageView implements ImageTransformCB {
         }
     }
 
+    public void registerSelfieUpdateCB(SelfieUpdateCB aCB_in)
+    {
+        mySelfieUpdateCB = aCB_in;
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -111,6 +126,32 @@ public class DressedupView extends ImageView implements ImageTransformCB {
         Utils.bitmapToMat(aBMP_in, mySelfieMat);
 
         mySelfieMat.convertTo(mySelfieMat, -1, 1, 30);
+
+        //processSelfie();
+    }
+
+    private void registerSelfieWithDress()
+    {
+        if (mySelfieMat != null)
+        {
+            Mat aSelfieMatGrayScale = Mat.zeros(mySelfieMat.size(), CvType.CV_8U);
+            Imgproc.cvtColor(mySelfieMat, aSelfieMatGrayScale, Imgproc.COLOR_BGR2GRAY);
+
+            Mat aDressMatGrayScale = Mat.zeros(myDressMat.size(), CvType.CV_8U);
+            Imgproc.cvtColor(myDressMat, aDressMatGrayScale, Imgproc.COLOR_BGR2GRAY);
+
+            SelfieProcessor aSelfieProc = new SelfieProcessor(aSelfieMatGrayScale, aDressMatGrayScale);
+            aSelfieProc.register();
+
+            org.opencv.core.Point aZoomFactor = aSelfieProc.getZoomFactor();
+            org.opencv.core.Point aPanFactor = aSelfieProc.getPanFactor();
+
+            Log.i("register", "aZoomFactor = [" + aZoomFactor.x + ", " +  aZoomFactor.y + "]");
+            Log.i("register", "aPanFactor = [" + aPanFactor.x + ", " +  aPanFactor.y + "]");
+
+            myListener.init(aZoomFactor);
+            myGestureListener.init(aPanFactor);
+        }
     }
 
     public void setDressBMP(Bitmap aBMP_in)
@@ -183,6 +224,8 @@ public class DressedupView extends ImageView implements ImageTransformCB {
             myMergedBMP = Bitmap.createBitmap(myDressMat.cols(), myDressMat.rows(), Bitmap.Config.ARGB_8888);
 
 
+            registerSelfieWithDress();
+
         }
 
 
@@ -242,9 +285,14 @@ public class DressedupView extends ImageView implements ImageTransformCB {
 
         return aTransformMatrix;
     }
+
+
+
+
     public void updateDisplay()
     {
-        if (mySelfieMat != null && myDressOnlyMat != null) {
+        if (mySelfieMat != null && myDressOnlyMat != null)
+        {
             Mat aTransformMatrix = getDressTransformationMatrix();
 
             Mat aTransformedDressImage = Mat.zeros(myDressOnlyMat.size(), myDressOnlyMat.type());
@@ -266,6 +314,12 @@ public class DressedupView extends ImageView implements ImageTransformCB {
 
             this.setImageBitmap(myMergedBMP);
             this.invalidate();
+
+            if(mySelfieUpdateCB != null)
+            {
+                mySelfieUpdateCB.selfieUpdated();
+
+            }
         }
     }
 
@@ -286,8 +340,8 @@ public class DressedupView extends ImageView implements ImageTransformCB {
     private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener
     {
 
-        private float myXZoom = 1.f;
-        private float myYZoom = 1.f;
+        private double myXZoom = 1.f;
+        private double myYZoom = 1.f;
 
         private ImageTransformCB myTransformCB;
 
@@ -304,11 +358,17 @@ public class DressedupView extends ImageView implements ImageTransformCB {
             myYZoom = 1.f;
         }
 
-        public float getXZoom()
+        public void init(org.opencv.core.Point aZoom_in)
+        {
+            myXZoom = aZoom_in.x;
+            myYZoom = aZoom_in.y;
+        }
+
+        public double getXZoom()
         {
             return myXZoom;
         }
-        public float getYZoom()
+        public double getYZoom()
         {
             return myYZoom;
         }
@@ -362,6 +422,12 @@ public class DressedupView extends ImageView implements ImageTransformCB {
         {
             myXPan = 0;
             myYPan = 0;
+        }
+
+        public void init(org.opencv.core.Point aPan_in)
+        {
+            myXPan = (int)aPan_in.x;
+            myYPan = (int)aPan_in.y;
         }
 
         public float getXPan()

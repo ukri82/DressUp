@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Point;
 import android.net.Uri;
 import android.os.Bundle;
+import android.support.v4.view.MenuItemCompat;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
 import android.view.Menu;
@@ -18,6 +19,11 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.SurfaceView;
 import java.io.ByteArrayOutputStream;
+import android.support.v7.widget.ShareActionProvider;
+import android.widget.Toast;
+import android.os.Environment;
+import android.graphics.Bitmap.CompressFormat;
+import android.content.Context;
 
 
 import org.opencv.android.BaseLoaderCallback;
@@ -34,13 +40,18 @@ import org.opencv.imgproc.Imgproc;
 
 import java.io.FileNotFoundException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
+import java.io.FileOutputStream;
+import java.io.File;
+import java.io.IOException;
+
 import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.TreeMap;
 
 
-public class MainActivity extends ActionBarActivity implements LongPressCB {
+public class MainActivity extends ActionBarActivity implements LongPressCB, ShareActionProvider.OnShareTargetSelectedListener, SelfieUpdateCB
+{
 
     private static final String TAG = "Dressup::MainActivity";
 
@@ -79,9 +90,17 @@ public class MainActivity extends ActionBarActivity implements LongPressCB {
         myDressView = (ImageView) MainActivity.this.findViewById(R.id.imageDress);
         myMergedView = (DressedupView) MainActivity.this.findViewById(R.id.imageMerged);
 
+        shareIntent.setType("image/*");
+
         run();
     }
 
+    @Override
+    protected void onDestroy()
+    {
+        super.onDestroy();
+        cleanDir(getCacheDir());
+    }
     @Override
     public void press()
     {
@@ -89,14 +108,14 @@ public class MainActivity extends ActionBarActivity implements LongPressCB {
         anIntent.putExtra("android.intent.extras.CAMERA_FACING", 1);
         startActivityForResult(anIntent, TAKE_PICTURE);
     }
-    private void run() {
-
-
+    private void run()
+    {
         Point screenSize = new Point();
         getWindowManager().getDefaultDisplay().getSize(screenSize);
         myMergedView.setCurrentActivityDims(screenSize);
 
         myMergedView.registerPressCB(this);
+        myMergedView.registerSelfieUpdateCB(this);
 
         mySelfyView.setOnClickListener(new View.OnClickListener() {
 
@@ -122,192 +141,152 @@ public class MainActivity extends ActionBarActivity implements LongPressCB {
             }
         });
 
+    }
+
+    private ShareActionProvider mShareActionProvider;
+    private Intent shareIntent=new Intent(Intent.ACTION_SEND);
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu)
+    {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+
+        //getMenuInflater().inflate(R.menu.share_menu, menu);
 
 
 
+        MenuItem item = menu.findItem(R.id.menu_item_share);
 
-                /*
-                if (mySelfieBmp != null && myDressBmp != null)
-                //if (myDressBmp != null)
-                {
+        mShareActionProvider = (ShareActionProvider)MenuItemCompat.getActionProvider(item);
 
+        mShareActionProvider.setOnShareTargetSelectedListener(this);
 
-					Mat img1 = new Mat();
-					Utils.bitmapToMat(mySelfieBmp, img1);
-                    Mat img2 = new Mat();
-                    Utils.bitmapToMat(myDressBmp, img2);
+        return(super.onCreateOptionsMenu(menu));
+        //return true;
+    }
+    @Override
+    public boolean onShareTargetSelected(ShareActionProvider source, Intent intent)
+    {
+        /*Toast.makeText(this, intent.getComponent().toString(),
+                Toast.LENGTH_LONG).show();*/
 
-                    Mat aSelfieMat = new Mat (img1.cols(), img1.rows(), CvType.CV_8U);
-                    Imgproc.cvtColor(img1, aSelfieMat, Imgproc.COLOR_BGR2GRAY);
+        if (mShareActionProvider != null)
+        {
+            //mShareActionProvider.setShareIntent(shareIntent);
+            //setShareIntent(intent);
+        }
 
-                    Mat aDressMat = new Mat (img2.cols(), img2.rows(), CvType.CV_8U);
-                    Imgproc.cvtColor(img2, aDressMat, Imgproc.COLOR_BGR2GRAY);
+        return(false);
+    }
 
+    private Timer myTimer = new Timer();
+    private Runnable Timer_Tick = new Runnable() {
+        public void run() {
 
-                    ImageProcessor anImageProc = new ImageProcessor(aDressMat);
-                    anImageProc.regionGrow();
+            //This method runs in the same thread as the UI.
 
-                    aDressMat.put(0, 0, anImageProc.getVisitedMatrix());
-                    Mat anInvertedDressMat= new Mat(aDressMat.rows(),aDressMat.cols(), aDressMat.type(), new Scalar(255,255,255));
+            //Do something to the UI thread here
 
-                    Core.subtract(anInvertedDressMat, aDressMat, anInvertedDressMat);
+            setShareIntent();
 
-                    Mat aPartialDressImage = new Mat(anInvertedDressMat.cols(), anInvertedDressMat.rows(), CvType.CV_8U);
-                    img2.copyTo(aPartialDressImage, anInvertedDressMat);
-
-                    Mat aPartialSelfieImage = new Mat(anInvertedDressMat.cols(), anInvertedDressMat.rows(), CvType.CV_8U);
-                    img1.copyTo(aPartialSelfieImage, aDressMat);
-
-                    Mat aBlendedImage = new Mat(anInvertedDressMat.cols(), anInvertedDressMat.rows(), img1.type());
-                    Core.addWeighted(aPartialSelfieImage, 1, aPartialDressImage, 1, 0, aBlendedImage);
-
-                    Bitmap bm = Bitmap.createBitmap(aBlendedImage.cols(), aBlendedImage.rows(),Bitmap.Config.ARGB_8888);
-                    Utils.matToBitmap(aBlendedImage, bm);
+        }
+    };
 
 
+    private void TimerMethod()
+    {
+        //This method is called directly by the timer
+        //and runs in the same thread as the timer.
 
-                    myMergedView.setImageBitmap(bm);
-                    myMergedView.invalidate();
+        //We call the method that will work with the UI
+        //through the runOnUiThread method.
+        Log.i(TAG, "in DressedupView::TimerMethod myCBCameAgain = " + myCBCameAgain);
+        if(myCBCameAgain)
+        {
+            myCBCameAgain = false;
+            triggerTimer();
+        }
+        else
+        {
+            myTimerTriggered = false;
+            this.runOnUiThread(Timer_Tick);
+        }
+    }
 
-			        /*
-			        Scalar lowerThreshold = new Scalar ( 120, 100, 100 ); // Blue color – lower hsv values
-			        Scalar upperThreshold = new Scalar ( 179, 255, 255 ); // Blue color – higher hsv values
-			        Core.inRange ( aDressMat, lowerThreshold , upperThreshold, aDressMat );
-
-			        Mat aDilatedDressMat = new Mat (img2.cols(), img2.rows(), CvType.CV_8U);
-			        Imgproc.dilate ( aDressMat, aDilatedDressMat, new Mat() );*/
-
-                    /*Mat imageHSV = new Mat(img2.size(), CvType.CV_8U);
-                    Mat imageBlurr = new Mat(img2.size(), CvType.CV_8U);
-                    Mat imageA = new Mat(img2.size(), CvType.CV_8U);
-                    Imgproc.cvtColor(img2, imageHSV, Imgproc.COLOR_BGR2GRAY);
-                    Imgproc.GaussianBlur(imageHSV, imageBlurr, new Size(7,7), 0);
-                    Imgproc.adaptiveThreshold(imageBlurr, imageA, 255,Imgproc.ADAPTIVE_THRESH_MEAN_C, Imgproc.THRESH_BINARY,7, 5);
-
-
-                    List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
-
-                    Mat aContourMat = new Mat (img2.cols(), img2.rows(), CvType.CV_8U);
-
-                    //Imgproc.findContours ( imageA, contours, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE );
-                    Imgproc.findContours ( imageA, contours, new Mat(), Imgproc.RETR_LIST, 4 );
-
-                    Log.i(TAG, "contours.size() = " + contours.size());*/
-
-			        /*Scalar color = new Scalar( 0, 0, 255 );
-			        for ( int contourIdx=0; contourIdx < contours.size(); contourIdx++ )
-			        {
-			           if(Imgproc.contourArea(contours.get(contourIdx)) > 1)  // Minimum size allowed for consideration
-			           {
-			               Imgproc.drawContours ( aContourMat, contours, contourIdx, color);
-			           }
-			        }*/
-
-                   /* MatOfPoint anAllPointSet = new MatOfPoint();
-
-                    for ( int contourIdx=0; contourIdx < contours.size(); contourIdx++ )
-                    {
-                        anAllPointSet.push_back(contours.get(contourIdx));
-                    }
-
-                    Log.i(TAG, "anAllPointSet.size() = " + anAllPointSet.size());*/
-			        /*for ( int i = 0; i < anAllPointSet.size().height; i++ )
-			        {
-			        	Log.i(TAG, "anAllPointSet = (" + anAllPointSet.get(i, 0)[0] + ", " + anAllPointSet.get(i, 0)[1] + ")");
-			        }
-
-			        MatOfInt aContourHull = new MatOfInt();
-			        Imgproc.convexHull (anAllPointSet, aContourHull);
-
-			        Log.i(TAG, "aContourHull.size() = " + aContourHull.size());
-
-			        List<MatOfPoint> aConvexContours = new ArrayList<MatOfPoint>();
-			        MatOfPoint aConvexContour = new MatOfPoint();
-			        for ( int i = 0; i < aContourHull.size().height; i++ )
-			        {
-			        	int index = (int)aContourHull.get(i, 0)[0];
-			        	double[] point = new double[] {anAllPointSet.get(index, 0)[0], anAllPointSet.get(index, 0)[1]};
-			        	aConvexContour.put(i, 0, point);
-			        	Log.i(TAG, "point = (" + point[0] + ", " + point[1] + ")");
-			        }*/
-
-                    /*TreeMap<Integer, Integer> aLeftPoints = new TreeMap<Integer, Integer>();
-                    TreeMap<Integer, Integer> aRightPoints = new TreeMap<Integer, Integer>();
-                    for ( int i = 0; i < anAllPointSet.size().height; i++ )
-                    {
-                        int anX = (int)anAllPointSet.get(i, 0)[0];
-                        int aY = (int)anAllPointSet.get(i, 0)[1];
-                        if(aLeftPoints.containsKey(aY))
-                        {
-                            int aCurrLeft = (int)aLeftPoints.get(aY);
-                            if(anX < aCurrLeft)
-                            {
-                                aLeftPoints.put(aY, anX);
-                            }
-                        }
-                        else
-                        {
-                            aLeftPoints.put(aY, anX);
-                        }
-
-                        if(aRightPoints.containsKey(aY))
-                        {
-                            int aCurrRight = (int)aRightPoints.get(aY);
-                            if(anX > aCurrRight)
-                            {
-                                aRightPoints.put(aY, anX);
-                            }
-                        }
-                        else
-                        {
-                            aRightPoints.put(aY, anX);
-                        }
-                    }
-
-                    List<MatOfPoint> aConvexContours = new ArrayList<MatOfPoint>();
-                    MatOfPoint aConvexContour = new MatOfPoint();
-
-                    int i = 0;
-                    for (Map.Entry<Integer, Integer> entry : aLeftPoints.entrySet())
-                    {
-                        Log.i(TAG, "point = (" + entry.getKey() + " = " + entry.getValue() + ")");
-                        double[] point = new double[] {entry.getKey(), entry.getValue()};
-                        aConvexContour.put(i++, 0, point);
-                    }
-                    aConvexContours.add(aConvexContour);
-
-                    aConvexContour = new MatOfPoint();
-                    i = 0;
-                    for (Map.Entry<Integer, Integer> entry : aRightPoints.entrySet())
-                    {
-                        Log.i(TAG, "point = (" + entry.getKey() + " = " + entry.getValue() + ")");
-                        double[] point = new double[] {entry.getKey(), entry.getValue()};
-                        aConvexContour.put(i++, 0, point);
-                    }
-                    aConvexContours.add(aConvexContour);*/
-
-
-			        /*aConvexContours.add(aConvexContour);*/
-                    /*Scalar color = new Scalar( 255, 255, 255 );
-                    Imgproc.drawContours ( aContourMat, aConvexContours, 0, color);
-                    Imgproc.drawContours ( aContourMat, aConvexContours, 1, color);
-
-                    Bitmap bm = Bitmap.createBitmap(aContourMat.cols(), aContourMat.rows(),Bitmap.Config.ARGB_8888);
-                    Utils.matToBitmap(aContourMat, bm);
-
-                    myMergedView.setImageBitmap(bm);
-                    myMergedView.invalidate();*/
-            /*    }
+    private void triggerTimer()
+    {
+        myTimerTriggered = true;
+        myTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                TimerMethod();
             }
-        });*/
+
+        }, 1000);
     }
 
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
+    boolean myCBCameAgain = false;
+    boolean myTimerTriggered = false;
+    public void selfieUpdated()
+    {
+        Log.i(TAG, "in DressedupView::selfieUpdated myCBCameAgain = " + myCBCameAgain);
+
+        if(myTimerTriggered == false)
+            triggerTimer();
+        else
+            myCBCameAgain = true;
+
+        if (mShareActionProvider != null)
+        {
+            //mShareActionProvider.setShareIntent(shareIntent);
+            //setShareIntent(shareIntent);
+        }
+    }
+
+    private static void cleanDir(File dir)
+    {
+        File[] files = dir.listFiles();
+
+        for (File file : files)
+        {
+            file.delete();
+        }
+    }
+    // Call to update the share intent
+    private void setShareIntent()
+    {
+        if (mShareActionProvider != null)
+        {
+            View content = findViewById(R.id.imageMerged);
+            content.setDrawingCacheEnabled(true);
+
+            Bitmap bitmap = content.getDrawingCache();
+
+            try
+            {
+                File cachePath = File.createTempFile("SelfieDressed", "jpg");
+
+                FileOutputStream ostream = new FileOutputStream(cachePath);
+                bitmap.compress(CompressFormat.JPEG, 100, ostream);
+
+                ostream.flush();
+
+                cachePath.setReadable(true, false);
+                ostream.close();
+
+                shareIntent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(cachePath));
+                mShareActionProvider.setShareIntent(shareIntent);
+
+            }
+            catch (Exception e)
+            {
+                e.printStackTrace();
+            }
+
+            content.setDrawingCacheEnabled(false);
+        }
     }
 
     @Override
@@ -351,6 +330,7 @@ public class MainActivity extends ActionBarActivity implements LongPressCB {
         myMergedView.setSelfieBMP(aBMP_in);
     }
 
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode,
                                     Intent imageReturnedIntent) {
@@ -379,7 +359,6 @@ public class MainActivity extends ActionBarActivity implements LongPressCB {
                     if (mySelectionImageNo == 1)
                     {
                         setSelfie(yourSelectedImage);
-
                     }
                     else if (mySelectionImageNo == 2)
                     {
@@ -387,6 +366,12 @@ public class MainActivity extends ActionBarActivity implements LongPressCB {
                         myDressBmp = yourSelectedImage;
                         myDressView.invalidate();
                         myMergedView.setDressBMP(myDressBmp);
+
+                        myCBCameAgain = false;
+                        myTimerTriggered = false;
+
+                        setShareIntent();
+
                     }
                 }
                 break;
