@@ -4,6 +4,8 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Point;
+import android.graphics.PorterDuff;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.v4.view.MenuItemCompat;
@@ -50,7 +52,7 @@ import java.util.TimerTask;
 import java.util.TreeMap;
 
 
-public class MainActivity extends ActionBarActivity implements LongPressCB, ShareActionProvider.OnShareTargetSelectedListener, SelfieUpdateCB
+public class MainActivity extends ActionBarActivity implements LongPressCB, ShareActionProvider.OnShareTargetSelectedListener, SelfieUpdateCB, ServerInterface.ImageLoadedCB
 {
 
     private static final String TAG = "Dressup::MainActivity";
@@ -59,6 +61,7 @@ public class MainActivity extends ActionBarActivity implements LongPressCB, Shar
     private static DressedupView myMergedView;
     private static final int SELECT_PHOTO = 100;
     private static final int TAKE_PICTURE = 101;
+    private static final int SELECT_DRESS = 102;
 
     private static int mySelectionImageNo = 0;
 
@@ -80,15 +83,54 @@ public class MainActivity extends ActionBarActivity implements LongPressCB, Shar
         }
     };
 
+    private void modifyImageView(ImageView aView_in)
+    {
+        aView_in.setColorFilter(0x7700FF00, PorterDuff.Mode.MULTIPLY);
+
+        aView_in.setOnTouchListener(new View.OnTouchListener() {
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN: {
+                        ImageView view = (ImageView) v;
+                        //overlay is black with transparency of 0x77 (119)
+                        view.getDrawable().setColorFilter(0x77000000,PorterDuff.Mode.SRC_ATOP);
+                        view.invalidate();
+                        break;
+                    }
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL: {
+                        ImageView view = (ImageView) v;
+                        //clear the overlay
+                        view.getDrawable().clearColorFilter();
+                        view.invalidate();
+                        break;
+                    }
+                }
+
+                return false;
+            }
+        });
+    }
 
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(Bundle savedInstanceState)
+    {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
 
         mySelfyView = (ImageView) MainActivity.this.findViewById(R.id.imageSelfie);
         myDressView = (ImageView) MainActivity.this.findViewById(R.id.imageDress);
         myMergedView = (DressedupView) MainActivity.this.findViewById(R.id.imageMerged);
+
+        //mySelfyView.setColorFilter(0x7700FF00, PorterDuff.Mode.MULTIPLY);
+        //myDressView.setColorFilter(0x7700FF00, PorterDuff.Mode.MULTIPLY);
+
+        modifyImageView(mySelfyView);
+        modifyImageView(myDressView);
 
         shareIntent.setType("image/*");
 
@@ -134,9 +176,12 @@ public class MainActivity extends ActionBarActivity implements LongPressCB, Shar
             @Override
             public void onClick(View arg0) {
 
-                Intent photoPickerIntent = new Intent(Intent.ACTION_PICK);
+                /*Intent photoPickerIntent = new Intent(Intent.ACTION_PICK);
                 photoPickerIntent.setType("image/*");
-                startActivityForResult(photoPickerIntent, SELECT_PHOTO);
+                startActivityForResult(photoPickerIntent, SELECT_PHOTO);*/
+                Intent intent = new Intent(MainActivity.this, ArmoireDemoActivity.class);
+                startActivityForResult(intent, SELECT_DRESS);
+
                 mySelectionImageNo = 2;
             }
         });
@@ -330,6 +375,23 @@ public class MainActivity extends ActionBarActivity implements LongPressCB, Shar
         myMergedView.setSelfieBMP(aBMP_in);
     }
 
+    private void setDress(Bitmap aDressBitmap_in)
+    {
+        myDressView.setImageBitmap(aDressBitmap_in);
+        myDressBmp = aDressBitmap_in;
+        myDressView.invalidate();
+        myMergedView.setDressBMP(myDressBmp);
+
+        myCBCameAgain = false;
+        myTimerTriggered = false;
+
+        setShareIntent();
+    }
+    public void imageLoaded(Bitmap result)
+    {
+        result = Bitmap.createScaledBitmap(result, 200, 300, true);
+        setDress(result);
+    }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode,
@@ -362,7 +424,7 @@ public class MainActivity extends ActionBarActivity implements LongPressCB, Shar
                     }
                     else if (mySelectionImageNo == 2)
                     {
-                        myDressView.setImageBitmap(yourSelectedImage);
+                        /*myDressView.setImageBitmap(yourSelectedImage);
                         myDressBmp = yourSelectedImage;
                         myDressView.invalidate();
                         myMergedView.setDressBMP(myDressBmp);
@@ -370,10 +432,19 @@ public class MainActivity extends ActionBarActivity implements LongPressCB, Shar
                         myCBCameAgain = false;
                         myTimerTriggered = false;
 
-                        setShareIntent();
+                        setShareIntent();*/
+                        setDress(yourSelectedImage);
 
                     }
                 }
+                break;
+            case SELECT_DRESS:
+
+                String aDressURL = imageReturnedIntent.getStringExtra("DRESS_URL");
+                Log.i("onActivityResult", "Selected Dress URL is = " + aDressURL);
+
+                new ServerInterface.ImageLoadTask(aDressURL, this).execute();
+
                 break;
             case TAKE_PICTURE:
                 if (resultCode == RESULT_OK)
