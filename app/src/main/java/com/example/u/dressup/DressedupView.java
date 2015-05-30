@@ -28,6 +28,7 @@ import org.opencv.android.Utils;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.core.Size;
@@ -70,6 +71,7 @@ public class DressedupView extends ImageView implements ImageTransformCB {
 
     private Mat myDressOnlyMat;
     private Mat myDressOnlyMatGrayScale;
+    Context myContext;
 
 
     private Bitmap myMergedBMP;
@@ -94,6 +96,8 @@ public class DressedupView extends ImageView implements ImageTransformCB {
 
 
         Log.i(TAG, "in DressedupView::context");
+
+        myContext = context;
         myListener = new ScaleListener();
         myListener.registerCB(this);
         myScaleDetector = new ScaleGestureDetector(context, myListener);
@@ -132,26 +136,27 @@ public class DressedupView extends ImageView implements ImageTransformCB {
         mySelfieMat.convertTo(mySelfieMat, -1, 1, 30);
 
         Imgproc.cvtColor(mySelfieMat, mySelfieMat, Imgproc.COLOR_BGRA2BGR);
-        //processSelfie();
+        processSelfie();
     }
+
+    Rect mySelfieRect;
+    Rect myDressRect;
 
     private void registerSelfieWithDress()
     {
-        if (mySelfieMat != null)
+        if (mySelfieMat != null && myDressOnlyMatGrayScale != null)
         {
             Mat aSelfieMatGrayScale = Mat.zeros(mySelfieMat.size(), CvType.CV_8U);
             Imgproc.cvtColor(mySelfieMat, aSelfieMatGrayScale, Imgproc.COLOR_BGR2GRAY);
 
-            Mat aDressMatGrayScale = Mat.zeros(myDressMat.size(), CvType.CV_8U);
-            Imgproc.cvtColor(myDressMat, aDressMatGrayScale, Imgproc.COLOR_BGR2GRAY);
-
-            SelfieProcessor aSelfieProc = new SelfieProcessor(aSelfieMatGrayScale, aDressMatGrayScale);
+            SelfieProcessor aSelfieProc = new SelfieProcessor(aSelfieMatGrayScale, myDressOnlyMatGrayScale, myContext);
             aSelfieProc.register();
+            aSelfieMatGrayScale.release();
+            mySelfieRect = aSelfieProc.getBodyRect();
+            myDressRect = aSelfieProc.getDressRect();
 
             org.opencv.core.Point aZoomFactor = aSelfieProc.getZoomFactor();
             org.opencv.core.Point aPanFactor = aSelfieProc.getPanFactor();
-
-            //aZoomFactor.y = aZoomFactor.x;
 
             Log.i("register", "aZoomFactor = [" + aZoomFactor.x + ", " +  aZoomFactor.y + "]");
             Log.i("register", "aPanFactor = [" + aPanFactor.x + ", " +  aPanFactor.y + "]");
@@ -196,6 +201,59 @@ public class DressedupView extends ImageView implements ImageTransformCB {
         return true;
     }
 
+    private void processSelfie()
+    {
+        myMergedBMP = Bitmap.createBitmap(mySelfieMat.cols(), mySelfieMat.rows(), Bitmap.Config.ARGB_8888);
+
+        Mat aSelfieMatGrayScale = Mat.zeros(mySelfieMat.size(), CvType.CV_8U);
+        Imgproc.cvtColor(mySelfieMat, aSelfieMatGrayScale, Imgproc.COLOR_BGR2GRAY);
+
+        /*SelfieProcessor aSelfieProc = new SelfieProcessor(aSelfieMatGrayScale, null, myContext);
+
+        Mat aSelfieMat = aSelfieProc.readHumanMat();
+        myMergedBMP = Bitmap.createBitmap(mySelfieMat.cols(), mySelfieMat.rows(), Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(aSelfieMat, myMergedBMP);
+        this.setImageBitmap(myMergedBMP);
+        this.invalidate();*/
+    }
+
+
+    public void initializeImages1()
+    {
+        if (myDressMat != null)
+        {
+            myDressOnlyMat = Mat.zeros(myDressMat.size(), myDressMat.type());
+            Imgproc.cvtColor(myDressMat, myDressOnlyMat, Imgproc.COLOR_BGRA2BGR);   //  Ignore the alpha channel.
+
+            myDressOnlyMatGrayScale = Mat.zeros(myDressMat.size(), CvType.CV_8U);
+            Imgproc.cvtColor(myDressMat, myDressOnlyMatGrayScale, Imgproc.COLOR_BGR2GRAY);  //  Extract the gray values
+
+            Mat a255Matrix = Mat.zeros(myDressOnlyMatGrayScale.size(), myDressOnlyMatGrayScale.type());
+            a255Matrix.setTo(new Scalar(255));
+
+            Mat aDressOnlyMatBW = Mat.zeros(myDressOnlyMatGrayScale.size(), myDressOnlyMatGrayScale.type());
+            a255Matrix.copyTo(aDressOnlyMatBW, myDressOnlyMatGrayScale);    //  Copy only the pixels that has > 0 value in the grayscale
+            Core.subtract(a255Matrix, aDressOnlyMatBW, myDressOnlyMatGrayScale);    //  Now invert it by subtracting from all-255 image
+
+            myMergedBMP = Bitmap.createBitmap(myDressMat.cols(), myDressMat.rows(), Bitmap.Config.ARGB_8888);
+
+            Mat aSelfieMatGrayScale = Mat.zeros(mySelfieMat.size(), CvType.CV_8U);
+            Imgproc.cvtColor(mySelfieMat, aSelfieMatGrayScale, Imgproc.COLOR_BGR2GRAY);
+
+            Mat aDressMatGrayScale = Mat.zeros(myDressMat.size(), CvType.CV_8U);
+            Imgproc.cvtColor(myDressMat, aDressMatGrayScale, Imgproc.COLOR_BGR2GRAY);
+
+            SelfieProcessor aSelfieProc = new SelfieProcessor(aSelfieMatGrayScale, aDressMatGrayScale, myContext);
+
+            myDressOnlyMat = aSelfieProc.readHumanMat();
+            myMergedBMP = Bitmap.createBitmap(myDressMat.cols(), myDressMat.rows(), Bitmap.Config.ARGB_8888);
+            Utils.matToBitmap(myDressOnlyMat, myMergedBMP);
+            this.setImageBitmap(myMergedBMP);
+            this.invalidate();
+
+            //registerSelfieWithDress();
+        }
+    }
 
     public void initializeImages()
     {
@@ -213,6 +271,8 @@ public class DressedupView extends ImageView implements ImageTransformCB {
             Mat aDressOnlyMatBW = Mat.zeros(myDressOnlyMatGrayScale.size(), myDressOnlyMatGrayScale.type());
             a255Matrix.copyTo(aDressOnlyMatBW, myDressOnlyMatGrayScale);    //  Copy only the pixels that has > 0 value in the grayscale
             Core.subtract(a255Matrix, aDressOnlyMatBW, myDressOnlyMatGrayScale);    //  Now invert it by subtracting from all-255 image
+            a255Matrix.release();
+            aDressOnlyMatBW.release();
 
             myMergedBMP = Bitmap.createBitmap(myDressMat.cols(), myDressMat.rows(), Bitmap.Config.ARGB_8888);
 
@@ -316,9 +376,6 @@ public class DressedupView extends ImageView implements ImageTransformCB {
         return aTransformMatrix;
     }
 
-
-
-
     public void updateDisplay()
     {
         if (mySelfieMat != null && myDressOnlyMat != null)
@@ -338,9 +395,17 @@ public class DressedupView extends ImageView implements ImageTransformCB {
 
             Mat aBlendedImage = Mat.zeros(myDressOnlyMat.size(), mySelfieMat.type());
             Core.addWeighted(aPartialSelfieImage, 1, aTransformedDressImage, 1, 0, aBlendedImage);
+            aTransformedDressImage.release();
+            aPartialSelfieImage.release();
+
+            //Core.rectangle(aBlendedImage, new org.opencv.core.Point(mySelfieRect.x, mySelfieRect.y), new org.opencv.core.Point(mySelfieRect.x + mySelfieRect.width, mySelfieRect.y + mySelfieRect.height), new Scalar(255));
+            //Core.rectangle(aBlendedImage, new org.opencv.core.Point(myDressRect.x, myDressRect.y), new org.opencv.core.Point(myDressRect.x + myDressRect.width, myDressRect.y + myDressRect.height), new Scalar(177));
+
 
 
             Utils.matToBitmap(aBlendedImage, myMergedBMP);
+
+            aBlendedImage.release();
 
             this.setImageBitmap(myMergedBMP);
             this.invalidate();

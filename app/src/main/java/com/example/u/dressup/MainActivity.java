@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Point;
 import android.graphics.PorterDuff;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
@@ -46,6 +47,9 @@ import java.io.FileOutputStream;
 import java.io.File;
 import java.io.IOException;
 
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLConnection;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -415,7 +419,28 @@ public class MainActivity extends ActionBarActivity implements LongPressCB, Shar
                         // TODO Auto-generated catch block
                         e.printStackTrace();
                     }
-                    Bitmap yourSelectedImage = BitmapFactory.decodeStream(imageStream);
+
+                    BitmapFactory.Options bitmapSize = new BitmapFactory.Options();
+                    bitmapSize.inJustDecodeBounds = true;
+                    BitmapFactory.decodeStream(imageStream, null, bitmapSize);
+                    try
+                    {
+                        imageStream = getContentResolver().openInputStream(selectedImage);
+                    }
+                    catch (FileNotFoundException e)
+                    {
+                        e.printStackTrace();
+                    }
+                    Log.i("onActivityResult", "Original bitmap size is = [" + bitmapSize.outHeight + ", " + bitmapSize.outWidth + "]");
+
+                    BitmapFactory.Options options = new BitmapFactory.Options();
+                    //options.outHeight = 300;
+                    //options.outWidth = 200;
+                    options.inSampleSize = Math.min(bitmapSize.outHeight / 300, bitmapSize.outWidth / 200);
+                    //options.inJustDecodeBounds = false;
+                    Log.i("onActivityResult", "options.inSampleSize is = [" + options.inSampleSize + "]");
+
+                    Bitmap yourSelectedImage = BitmapFactory.decodeStream(imageStream, null, options);
                     yourSelectedImage = Bitmap.createScaledBitmap(yourSelectedImage, 200, 300, true);
 
                     if (mySelectionImageNo == 1)
@@ -442,6 +467,24 @@ public class MainActivity extends ActionBarActivity implements LongPressCB, Shar
 
                 String aDressURL = imageReturnedIntent.getStringExtra("DRESS_URL");
                 Log.i("onActivityResult", "Selected Dress URL is = " + aDressURL);
+
+                try
+                {
+                    URL url = new URL(aDressURL);
+                    URLConnection urlConnection = url.openConnection();
+                    urlConnection.connect();
+                    int file_size = urlConnection.getContentLength();
+                    Log.i("onActivityResult", "Size of " + aDressURL + " is : " + file_size);
+                }
+                catch (MalformedURLException e)
+                {
+                    Log.i("onActivityResult", "MalformedURLException. " + aDressURL);
+                    e.printStackTrace();
+                }
+                catch (IOException e)
+                {
+                    e.printStackTrace();
+                }
 
                 new ServerInterface.ImageLoadTask(aDressURL, this).execute();
 
